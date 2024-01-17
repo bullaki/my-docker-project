@@ -1,0 +1,85 @@
+version: '3'
+
+vars:
+  ASDF_VERSION: "v0.13.1"
+  JETBRAINS_TOOLBOX_VERSION: "2.1.3.18901"
+
+tasks:
+  install-basic-packages:
+    desc: "Install fundamental packages"
+    cmds:
+      - sudo apt-get update
+      - sudo apt-get install -y build-essential curl micro
+
+  install-docker:
+    desc: "Install Docker"
+    cmds:
+      - |
+        if ! command -v docker &>/dev/null; then
+          function do-apt-add-repository () {
+            filename=$(basename "$0")
+            echo "${1}" | sudo tee "/etc/apt/sources.list.d/${filename%%.*}.list"
+          }
+          curl -sSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
+          do-apt-add-repository "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+          sudo apt-get update -qq
+          sudo apt-get install -yq docker-ce docker-ce-cli containerd.io
+          sudo usermod -aG docker $USER
+        else
+          echo "Docker is already installed."
+        fi
+
+  test-docker:
+    desc: "Test Docker installation"
+    cmds:
+      - docker run hello-world
+
+  install-aws-cli:
+    desc: "Install AWS CLI"
+    cmds:
+      - |
+        if ! command -v aws &>/dev/null; then
+          dir=$(mktemp -d)
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "$dir/awscliv2.zip"
+          unzip "$dir/awscliv2.zip" -d "$dir"
+          sudo "$dir/aws/install" --update
+          rm -rf "$dir"
+        else
+          echo "AWS CLI is already installed."
+        fi
+
+  install-asdf:
+    desc: "Install ASDF"
+    cmds:
+      - |
+        if ! command -v asdf &>/dev/null; then
+          git clone --depth 1 --branch ${ASDF_VERSION} https://github.com/asdf-vm/asdf.git $HOME/.asdf
+          echo -e "\n. $HOME/.asdf/asdf.sh\n. $HOME/.asdf/completions/asdf.bash" >> $HOME/.bashrc
+          source $HOME/.bashrc
+        else
+          echo "ASDF is already installed."
+        fi
+
+  add-asdf-plugins:
+    desc: "Add ASDF plugins"
+    cmds:
+      - asdf plugin-add direnv https://github.com/asdf-community/asdf-direnv.git || echo "direnv plugin already added"
+      # Repeat for each plugin, replacing 'direnv' with the respective plugin name
+
+  install-jetbrains-toolbox:
+    desc: "Install JetBrains Toolbox"
+    cmds:
+      - |
+        if ! test -x $HOME/.local/share/JetBrains/Toolbox/bin/jetbrains-toolbox; then
+          sudo apt-get install -qy libfuse2
+          curl -sSLO "https://download.jetbrains.com/toolbox/jetbrains-toolbox-${JETBRAINS_TOOLBOX_VERSION}.tar.gz"
+          tar xzf "jetbrains-toolbox-${JETBRAINS_TOOLBOX_VERSION}.tar.gz"
+          ./jetbrains-toolbox-${JETBRAINS_TOOLBOX_VERSION}/jetbrains-toolbox
+          rm -rf "jetbrains-toolbox-${JETBRAINS_TOOLBOX_VERSION}"
+        else
+          echo "JetBrains Toolbox is already installed."
+        fi
+
+  full-setup:
+    desc: "Run the full setup process"
+    deps: [install-basic-packages, install-docker, test-docker, install-aws-cli, install-asdf, add-asdf-plugins, install-jetbrains-toolbox]
